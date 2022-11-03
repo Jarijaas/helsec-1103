@@ -380,7 +380,7 @@ Content-Type: application/json
 # Grafana RCE
 
 <video>
-<source src="videos/flink.mp4" type="video/mp4">
+<source src="videos/grafana.mp4" type="video/mp4">
 </video>
 
 <BarBottom title="hackerone.com/reports/1418891">
